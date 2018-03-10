@@ -1,0 +1,201 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Socket.IO chat</title>
+    <style>
+      html, body, div, span, applet, object, iframe,
+      h1, h2, h3, h4, h5, h6, p, blockquote, pre,
+      a, abbr, acronym, address, big, cite, code,
+      del, dfn, em, img, ins, kbd, q, s, samp,
+      small, strike, strong, sub, sup, tt, var,
+      b, u, i, center,
+      dl, dt, dd, ol, ul, li,
+      fieldset, form, label, legend,
+      table, caption, tbody, tfoot, thead, tr, th, td,
+      article, aside, canvas, details, embed,
+      figure, figcaption, footer, header, hgroup,
+      menu, nav, output, ruby, section, summary,
+      time, mark, audio, video {
+        margin: 0;
+        padding: 0;
+        border: 0;
+        font-size: 100%;
+        font: inherit;
+        vertical-align: baseline;
+      }
+      /* HTML5 display-role reset for older browsers */
+      article, aside, details, figcaption, figure,
+      footer, header, hgroup, menu, nav, section {
+        display: block;
+      }
+      body {
+        line-height: 1;
+      }
+      ol, ul {
+        list-style: none;
+      }
+      blockquote, q {
+        quotes: none;
+      }
+      blockquote:before, blockquote:after,
+      q:before, q:after {
+        content: '';
+        content: none;
+      }
+      table {
+        border-collapse: collapse;
+        border-spacing: 0;
+      }
+      /* reset finished */
+      * {
+        font-family: 'Open Sans', sans-serif;
+      }
+      html {
+        height: 100%;
+        min-height: 100%;
+        min-width: 600px;
+      }
+      body {
+        height: 100%;
+        min-height: 100%;
+        display: flex;
+        flex-direction: column;
+        background: linear-gradient(#111, #444);
+      }
+      .messages-area {
+        margin: 1em;
+        display: flex;
+        flex-grow: 1;
+      }
+      .messages {
+        border: 2px solid white;
+        border-radius: 2px;
+        overflow: scroll;
+        overflow-x: hidden;
+        flex-grow: 3;
+        margin-right: 1em;
+        border-radius: 4px;
+        padding: 0.5em;
+        max-height: 70vh;
+      }
+      .online-users {
+        flex-grow: 1;
+        max-height: 70vh;
+      }
+      .messages p {
+        font-family: 'Open Sans', sans-serif;
+        color: #DDD;
+        border-radius: 10px;
+        margin-bottom: 1em;
+        padding: 9px;
+        background: linear-gradient(#333, #555);
+      }
+      .online-users p {
+        font-family: 'Open Sans', sans-serif;
+        background: linear-gradient(#333, #555);
+        padding: 9px;
+        color: white;
+      }
+
+      .messages .self-message {
+        font-weight: bold;
+      }
+
+      .messages .server-message {
+        font-style: italic;
+      }
+
+      form {
+        margin: 1em;
+        display: flex;
+        flex-direction: column;
+        height: 20vh;
+      }
+      form textarea {
+        flex-grow: 1;
+        padding: 9px;
+        resize: none;
+      }
+      form button {
+        height: 4em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="messages-area">
+      <div class="messages">
+      </div>
+      <div class="online-users">
+      </div>p
+    </div>
+    <form action="">
+      <textarea id="m" autocomplete="off" /></textarea>
+      <button>SEND</button>
+    </form>
+    <script src="https://cdn.socket.io/socket.io-1.2.0.js"></script>
+    <script src="https://code.jquery.com/jquery-1.11.1.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-cookie/2.2.0/js.cookie.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.21.0/moment.min.js"></script>
+    <script>
+      var selfNickname = '';
+      $('form textarea').keyup(function (event) {
+         if (event.shiftKey && event.keyCode == 13) {
+             event.stopPropagation();
+        } else if(event.keyCode == 13) {
+            $('form').submit();
+        }
+      });
+      $(function () {
+        var socket = io();
+        $('form').submit(function(){
+          if($('#m').val() !== '') {
+            if($('#m').val().startsWith('/nickcolor')) {
+              let newColor = "#" + $('#m').val().substring(11, $('#m').val().length - 1);
+              window.localStorage.setItem("color", newColor);
+              socket.emit('setColor', window.localStorage.getItem('color'));
+              $('#m').val('');
+              return false;
+            }
+            socket.emit('message', $('#m').val());
+            $('#m').val('');
+            return false;
+          } else {
+            return false;
+          }
+        });
+        socket.on('message', function(msg){
+          let newChat = $('<p>').text("["+moment(msg.timestamp.toString()).format("MMM-D-YYYY h:mm A")+"]"+" "+msg.nickname+": " + msg.message)
+          if(msg.color !== null) {
+            newChat.css('background', msg.color);
+          }
+          $('.messages').append(newChat);
+          if(selfNickname == msg.nickname) {
+            newChat.addClass('self-message');
+          } else if (msg.nickname === 'Server') {
+            newChat.addClass('server-message');
+          }
+          $('.messages').scrollTop($('.messages')[0].scrollHeight);
+        });
+        socket.on('online user', function(user) {
+          $('.online-users').append($('<p>').text(user));
+        });
+        socket.on('disconnect', function(garbage) {
+          $('.online-users').empty();
+        });
+        socket.on('your nickname', function(nickname) {
+          selfNickname = nickname;
+          window.localStorage.setItem("nickname", nickname);
+        });
+        socket.on('your color', function(color) {
+          window.localStorage.setItem("color", color);
+        });
+        socket.on('init', function(garbage) {
+          socket.emit('init', window.localStorage.getItem('nickname'))
+          if(window.localStorage.getItem('color')) {
+            socket.emit('initColor', window.localStorage.getItem('color'))
+          }
+        })
+      });
+    </script>
+  </body>
+</html>
